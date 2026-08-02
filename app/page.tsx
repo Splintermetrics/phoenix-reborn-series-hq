@@ -1,157 +1,47 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type SeriesKey = "madness" | "championship";
-
-const standings = {
-  madness: [
-    { name: "AbyssalNomad", points: 33, played: 3, wins: 1, podiums: 3, form: ["2", "1", "3"] },
-    { name: "YGG_Brawlers", points: 29, played: 3, wins: 1, podiums: 2, form: ["1", "5", "2"] },
-    { name: "Praetorian", points: 25, played: 3, wins: 1, podiums: 1, form: ["5", "4", "1"] },
-    { name: "ManaWarden", points: 23, played: 3, wins: 0, podiums: 2, form: ["3", "2", "5"] },
-    { name: "CrypticStorm", points: 19, played: 3, wins: 0, podiums: 1, form: ["4", "3", "8"] },
-    { name: "WildFireMage", points: 16, played: 3, wins: 0, podiums: 0, form: ["7", "6", "4"] },
-    { name: "ShieldOfPraetoria", points: 12, played: 3, wins: 0, podiums: 0, form: ["8", "7", "6"] },
-    { name: "LastSpark", points: 10, played: 3, wins: 0, podiums: 0, form: ["12", "8", "7"] },
-    { name: "NeonPhoenix", points: 8, played: 2, wins: 0, podiums: 0, form: ["9", "5", "—"] },
-    { name: "AshRunner", points: 6, played: 2, wins: 0, podiums: 0, form: ["11", "—", "8"] },
-  ],
-  championship: [
-    { name: "AbyssalNomad", points: 410, played: 4, wins: 1, podiums: 2, form: ["1", "9", "4"] },
-    { name: "CrypticStorm", points: 382, played: 4, wins: 1, podiums: 2, form: ["6", "1", "3"] },
-    { name: "Praetorian", points: 361, played: 4, wins: 0, podiums: 2, form: ["3", "5", "2"] },
-    { name: "ManaWarden", points: 344, played: 4, wins: 0, podiums: 1, form: ["2", "7", "6"] },
-    { name: "YGG_Brawlers", points: 318, played: 3, wins: 1, podiums: 1, form: ["—", "4", "1"] },
-    { name: "WildFireMage", points: 289, played: 4, wins: 0, podiums: 0, form: ["8", "6", "5"] },
-    { name: "NeonPhoenix", points: 251, played: 3, wins: 0, podiums: 0, form: ["5", "—", "7"] },
-    { name: "LastSpark", points: 228, played: 4, wins: 0, podiums: 0, form: ["10", "8", "9"] },
-    { name: "AshRunner", points: 190, played: 3, wins: 0, podiums: 0, form: ["12", "10", "—"] },
-    { name: "ShieldOfPraetoria", points: 172, played: 3, wins: 0, podiums: 0, form: ["14", "—", "11"] },
-  ],
-};
-
-const events = {
-  madness: [
-    { week: "03", name: "Reverse Speed", date: "31 Aug", winner: "AbyssalNomad", runner: "YGG_Brawlers", field: 18, status: "Final", battles: ["Final", "Semi-final A", "Semi-final B"] },
-    { week: "02", name: "Mana Rush", date: "24 Aug", winner: "Praetorian", runner: "ManaWarden", field: 17, status: "Final", battles: ["Final", "Semi-final A", "Semi-final B"] },
-    { week: "01", name: "First Spark", date: "17 Aug", winner: "YGG_Brawlers", runner: "AbyssalNomad", field: 20, status: "Final", battles: ["Final", "Semi-final A", "Semi-final B"] },
-  ],
-  championship: [
-    { week: "02B", name: "Diamond Ghost", date: "13 Sep", winner: "CrypticStorm", runner: "Praetorian", field: 16, status: "Final", battles: ["Final", "Semi-final A", "Semi-final B"] },
-    { week: "02A", name: "Gold Qualifier", date: "12 Sep", winner: "YGG_Brawlers", runner: "ManaWarden", field: 18, status: "Final", battles: ["Final", "Semi-final A", "Semi-final B"] },
-    { week: "01B", name: "Silver Qualifier", date: "5 Sep", winner: "AbyssalNomad", runner: "CrypticStorm", field: 21, status: "Final", battles: ["Final", "Semi-final A", "Semi-final B"] },
-  ],
-};
+type PlayerResult = { name: string; finish: number; wins: number; losses: number; officialPoints: number };
+type Tournament = { id: string; name: string; description: string; series: SeriesKey; startDate: string; status: number; format: string; entryFee: string; entrants: number; players: PlayerResult[]; battles: Array<{ id: string; label: string; players: string }> };
+type Feed = { organiser: string; tournaments: Tournament[]; syncedAt: string | null; error?: string };
+type Standing = { name: string; points: number; played: number; wins: number; podiums: number; form: string[] };
 
 const seriesCopy = {
-  madness: { short: "Monday Night Madness", season: "Afterdark Ascent", progress: "3 of 12 nights", qualifier: "Top 8 qualify", next: "07 Sep · Common Ground", unit: "pts" },
-  championship: { short: "Championship Series", season: "Rise from the Ashes", progress: "4 of 22 qualifiers", qualifier: "32-player final", next: "19 Sep · Bronze Qualifier", unit: "pts" },
+  madness: { short: "Monday Night Madness", season: "Afterdark Ascent", qualifier: "Top 8 qualify", unit: "pts" },
+  championship: { short: "Championship Series", season: "Rise from the Ashes", qualifier: "32-player final", unit: "pts" },
 };
 
-export default function Home() {
-  const [series, setSeries] = useState<SeriesKey>("madness");
-  const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(events.madness[0].week);
-  const copy = seriesCopy[series];
-  const rows = useMemo(() => standings[series].filter((row) => row.name.toLowerCase().includes(query.toLowerCase())), [series, query]);
-
-  function switchSeries(value: SeriesKey) {
-    setSeries(value);
-    setExpanded(events[value][0].week);
-    setQuery("");
+function mondayPoints(finish: number) { if (finish === 1) return 12; if (finish === 2) return 9; if (finish <= 4) return 7; if (finish <= 8) return 4; if (finish <= 16) return 2; return finish > 0 ? 1 : 0; }
+function buildStandings(tournaments: Tournament[], series: SeriesKey): Standing[] {
+  const playerMap = new Map<string, Standing>();
+  for (const tournament of tournaments.filter((item) => item.series === series && item.status === 2)) for (const result of tournament.players) {
+    const current = playerMap.get(result.name) ?? { name: result.name, points: 0, played: 0, wins: 0, podiums: 0, form: [] };
+    current.points += series === "madness" ? mondayPoints(result.finish) : result.officialPoints; current.played += 1; current.wins += result.finish === 1 ? 1 : 0; current.podiums += result.finish > 0 && result.finish <= 4 ? 1 : 0; current.form.push(result.finish > 0 ? String(result.finish) : "—"); playerMap.set(result.name, current);
   }
+  return [...playerMap.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || b.podiums - a.podiums || a.name.localeCompare(b.name));
+}
+function formatDate(value: string, withTime = false) { return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", ...(withTime ? { hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" } : {}) }).format(new Date(value)); }
 
-  return (
-    <main>
-      <header className="site-header">
-        <a className="brand" href="#top" aria-label="Phoenix Reborn standings home">
-          <img src="/phoenix-reborn-logo.png" alt="" />
-          <span><b>Phoenix Reborn</b><small>Series HQ</small></span>
-        </a>
-        <nav aria-label="Primary navigation">
-          <a href="#standings">Standings</a>
-          <a href="#results">Results</a>
-          <a href="#format">Format</a>
-        </nav>
-        <a className="watch" href="https://www.youtube.com/@PhoenixRebornTV" target="_blank" rel="noreferrer">Watch live <span>↗</span></a>
-      </header>
+export default function Home() {
+  const [series, setSeries] = useState<SeriesKey>("madness"); const [query, setQuery] = useState(""); const [expanded, setExpanded] = useState<string | null>(null);
+  const [feed, setFeed] = useState<Feed>({ organiser: "phoenixevents", tournaments: [], syncedAt: null }); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false);
+  const loadFeed = useCallback(async (manual = false) => { if (manual) setRefreshing(true); try { const response = await fetch("/api/tournaments", { cache: "no-store" }); const data = (await response.json()) as Feed; if (!response.ok) throw new Error(data.error ?? "Sync failed"); setFeed(data); } catch (error) { setFeed((current) => ({ ...current, error: error instanceof Error ? error.message : "Sync failed" })); } finally { setLoading(false); setRefreshing(false); } }, []);
+  useEffect(() => { loadFeed(); const timer = window.setInterval(() => loadFeed(), 300_000); return () => window.clearInterval(timer); }, [loadFeed]);
+  const copy = seriesCopy[series]; const seriesEvents = useMemo(() => feed.tournaments.filter((event) => event.series === series), [feed.tournaments, series]); const completedEvents = seriesEvents.filter((event) => event.status === 2);
+  const nextEvent = [...seriesEvents].filter((event) => event.status !== 2).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())[0]; const standings = useMemo(() => buildStandings(feed.tournaments, series), [feed.tournaments, series]); const rows = standings.filter((row) => row.name.toLowerCase().includes(query.toLowerCase()));
+  function switchSeries(value: SeriesKey) { setSeries(value); setExpanded(null); setQuery(""); }
 
-      <section className="hero" id="top">
-        <div className="hero-glow" />
-        <div className="hero-copy">
-          <p className="eyebrow"><span className="live-dot" /> Season one · standings centre</p>
-          <h1>Every battle.<br/><em>Every point.</em></h1>
-          <p className="intro">Follow the climb across both Phoenix Reborn tournament series. Live tables, event results and the battles that decided them.</p>
-          <div className="series-switch" role="group" aria-label="Choose series">
-            <button className={series === "madness" ? "active" : ""} onClick={() => switchSeries("madness")}><span>MNM</span> Monday Night Madness</button>
-            <button className={series === "championship" ? "active" : ""} onClick={() => switchSeries("championship")}><span>PRC</span> Championship Series</button>
-          </div>
-        </div>
-        <aside className="next-card">
-          <p>Next in the arena</p>
-          <strong>{copy.next.split(" · ")[0]}</strong>
-          <h2>{copy.next.split(" · ")[1]}</h2>
-          <div><span>20:00 UTC</span><span>Modern · Silver</span></div>
-          <a href="https://splinterlands.com/?p=tournaments" target="_blank" rel="noreferrer">View tournament <span>↗</span></a>
-        </aside>
-      </section>
-
-      <section className="ticker" aria-label="Season summary">
-        <div><small>Selected series</small><b>{copy.short}</b></div>
-        <div><small>Season</small><b>{copy.season}</b></div>
-        <div><small>Progress</small><b>{copy.progress}</b></div>
-        <div><small>Qualification</small><b>{copy.qualifier}</b></div>
-      </section>
-
-      <section className="content-section standings-section" id="standings">
-        <div className="section-heading">
-          <div><p className="eyebrow">The climb</p><h2>Current standings</h2><p className="demo-note">Preview data · connect official results before launch</p></div>
-          <label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a player" aria-label="Find a player" /></label>
-        </div>
-        <div className="leaderboard-shell">
-          <div className="table-head"><span>Rank</span><span>Player</span><span>Events</span><span>Wins</span><span>Recent form</span><span>Points</span></div>
-          {rows.map((row) => {
-            const rank = standings[series].findIndex((item) => item.name === row.name) + 1;
-            return <div className={`table-row ${rank <= (series === "madness" ? 8 : 10) ? "qualified" : ""}`} key={row.name}>
-              <span className="rank">{String(rank).padStart(2, "0")}</span>
-              <span className="player"><i>{row.name.slice(0, 2).toUpperCase()}</i><b>{row.name}</b>{rank <= 3 && <small>{rank === 1 ? "Leader" : "Podium"}</small>}</span>
-              <span data-label="Events">{row.played}</span><span data-label="Wins">{row.wins}</span>
-              <span className="form" data-label="Recent">{row.form.map((finish, index) => <i key={index}>{finish}</i>)}</span>
-              <span className="points">{row.points}<small>{copy.unit}</small></span>
-            </div>;
-          })}
-          {rows.length === 0 && <p className="empty">No player matches “{query}”.</p>}
-          <div className="table-key"><span><i className="key-line" /> Finale qualification zone</span><span>Updated after Week 3</span></div>
-        </div>
-      </section>
-
-      <section className="content-section results-section" id="results">
-        <div className="section-heading"><div><p className="eyebrow">Battle log</p><h2>Event results</h2></div><a href="https://splinterlands.com/?p=battle_history" target="_blank" rel="noreferrer">All battle history ↗</a></div>
-        <div className="event-list">
-          {events[series].map((event) => <article className={expanded === event.week ? "event-card open" : "event-card"} key={event.week}>
-            <button className="event-summary" onClick={() => setExpanded(expanded === event.week ? null : event.week)} aria-expanded={expanded === event.week}>
-              <span className="event-no">{event.week}</span><span className="event-name"><small>{event.date} · {event.status}</small><b>{event.name}</b></span>
-              <span className="event-winner"><small>Winner</small><b>{event.winner}</b></span><span className="field"><small>Field</small><b>{event.field}</b></span><span className="chevron">⌄</span>
-            </button>
-            {expanded === event.week && <div className="event-detail">
-              <div className="podium"><span><small>Champion</small><b>01 · {event.winner}</b></span><span><small>Runner-up</small><b>02 · {event.runner}</b></span></div>
-              <div className="battle-links">{event.battles.map((battle, index) => <a key={battle} href={`https://splinterlands.com/?p=battle&id=phoenix-reborn-${series}-${event.week}-${index + 1}`} target="_blank" rel="noreferrer"><span>▶</span>{battle}<small>Watch battle ↗</small></a>)}</div>
-            </div>}
-          </article>)}
-        </div>
-      </section>
-
-      <section className="format-section" id="format">
-        <div><p className="eyebrow">How it works</p><h2>One season.<br/>Two ways to rise.</h2></div>
-        <div className="format-grid">
-          <article><span>01</span><h3>Battle weekly</h3><p>Enter each event, make the cut and earn points from your final published placing.</p></article>
-          <article><span>02</span><h3>Climb the table</h3><p>Consistency counts. The table updates after the 24-hour results review window.</p></article>
-          <article><span>03</span><h3>Reach the finale</h3><p>Monday’s top 8 and the Championship’s 32 finalists fight for the season crown.</p></article>
-        </div>
-      </section>
-
-      <footer><div className="brand"><img src="/phoenix-reborn-logo.png" alt="" /><span><b>Phoenix Reborn</b><small>Rise again. Queue again.</small></span></div><p>Community-run Splinterlands competition.<br/>Results become final after review.</p><div><a href="#standings">Standings</a><a href="#results">Results</a><a href="https://splinterlands.com/?p=tournaments">Enter tournaments ↗</a></div></footer>
-    </main>
-  );
+  return <main>
+    <header className="site-header"><a className="brand" href="#top" aria-label="Phoenix Reborn standings home"><img src="/phoenix-reborn-logo.png" alt="" /><span><b>Phoenix Reborn</b><small>Series HQ</small></span></a><nav aria-label="Primary navigation"><a href="#standings">Standings</a><a href="#results">Results</a><a href="#format">Format</a></nav><a className="watch" href="https://www.youtube.com/@PhoenixRebornTV" target="_blank" rel="noreferrer">Watch live <span>↗</span></a></header>
+    <section className="hero" id="top"><div className="hero-glow" /><div className="hero-copy"><p className="eyebrow"><span className="live-dot" /> Live from the Splinterlands API</p><h1>Every battle.<br/><em>Every point.</em></h1><p className="intro">Follow the climb across both Phoenix Reborn tournament series. Official tables, event results and the battles that decided them.</p><div className="series-switch" role="group" aria-label="Choose series"><button className={series === "madness" ? "active" : ""} onClick={() => switchSeries("madness")}><span>MNM</span> Monday Night Madness</button><button className={series === "championship" ? "active" : ""} onClick={() => switchSeries("championship")}><span>PRC</span> Championship Series</button></div></div>
+      <aside className="next-card"><p>{nextEvent ? "Next in the arena" : "Tournament feed"}</p>{nextEvent ? <><strong>{formatDate(nextEvent.startDate)}</strong><h2>{nextEvent.name}</h2><div><span>{formatDate(nextEvent.startDate, true).split(", ").at(-1)}</span><span>{nextEvent.format.replaceAll("_", " ")}</span></div><a href={`https://splinterlands.com/?p=tournament&id=${nextEvent.id}`} target="_blank" rel="noreferrer">View tournament <span>↗</span></a></> : <div className="awaiting"><strong>Awaiting<br/>first event</strong><p>No tournaments created by <b>@phoenixevents</b> are visible yet. This page will populate automatically.</p><a href="https://splinterlands.com/?p=tournaments" target="_blank" rel="noreferrer">Open tournaments <span>↗</span></a></div>}</aside></section>
+    <section className="ticker" aria-label="Season summary"><div><small>Selected series</small><b>{copy.short}</b></div><div><small>Season</small><b>{copy.season}</b></div><div><small>API events found</small><b>{seriesEvents.length}</b></div><div><small>Qualification</small><b>{copy.qualifier}</b></div></section>
+    <section className="sync-strip" aria-live="polite"><span className={feed.error ? "sync-error" : ""}>{feed.error ? "Feed temporarily unavailable" : loading ? "Connecting to Splinterlands…" : `Synced with @${feed.organiser}${feed.syncedAt ? ` · ${new Date(feed.syncedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}`}</span><button onClick={() => loadFeed(true)} disabled={refreshing}>{refreshing ? "Refreshing…" : "Refresh now"}</button></section>
+    <section className="content-section standings-section" id="standings"><div className="section-heading"><div><p className="eyebrow">The climb</p><h2>Current standings</h2><p className="demo-note">Official results · updated automatically every five minutes</p></div><label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a player" aria-label="Find a player" /></label></div><div className="leaderboard-shell"><div className="table-head"><span>Rank</span><span>Player</span><span>Events</span><span>Wins</span><span>Recent form</span><span>Points</span></div>{rows.map((row) => { const rank = standings.findIndex((item) => item.name === row.name) + 1; return <div className={`table-row ${rank <= (series === "madness" ? 8 : 10) ? "qualified" : ""}`} key={row.name}><span className="rank">{String(rank).padStart(2, "0")}</span><span className="player"><i>{row.name.slice(0, 2).toUpperCase()}</i><b>{row.name}</b>{rank <= 3 && <small>{rank === 1 ? "Leader" : "Podium"}</small>}</span><span>{row.played}</span><span>{row.wins}</span><span className="form">{row.form.slice(0, 3).map((finish, index) => <i key={index}>{finish}</i>)}</span><span className="points">{Number.isInteger(row.points) ? row.points : row.points.toFixed(1)}<small>{copy.unit}</small></span></div>; })}{!loading && rows.length === 0 && <div className="empty-state"><span>00</span><h3>{query ? `No player matches “${query}”` : "The table is ready"}</h3><p>{query ? "Try a different IGN." : `Standings will appear here as soon as @${feed.organiser} completes the first ${copy.short} event.`}</p></div>}<div className="table-key"><span><i className="key-line" /> Finale qualification zone</span><span>{completedEvents.length ? `${completedEvents.length} completed event${completedEvents.length === 1 ? "" : "s"}` : "Pre-season"}</span></div></div></section>
+    <section className="content-section results-section" id="results"><div className="section-heading"><div><p className="eyebrow">Battle log</p><h2>Event results</h2></div><a href="https://splinterlands.com/?p=tournaments" target="_blank" rel="noreferrer">Splinterlands tournaments ↗</a></div><div className="event-list">{completedEvents.map((event, index) => { const sortedPlayers = [...event.players].sort((a, b) => a.finish - b.finish); const winner = sortedPlayers.find((player) => player.finish === 1); const runner = sortedPlayers.find((player) => player.finish === 2); return <article className={expanded === event.id ? "event-card open" : "event-card"} key={event.id}><button className="event-summary" onClick={() => setExpanded(expanded === event.id ? null : event.id)} aria-expanded={expanded === event.id}><span className="event-no">{String(completedEvents.length - index).padStart(2, "0")}</span><span className="event-name"><small>{formatDate(event.startDate)} · Final</small><b>{event.name}</b></span><span className="event-winner"><small>Winner</small><b>{winner?.name ?? "Result pending"}</b></span><span className="field"><small>Field</small><b>{event.entrants}</b></span><span className="chevron">⌄</span></button>{expanded === event.id && <div className="event-detail"><div className="podium"><span><small>Champion</small><b>01 · {winner?.name ?? "—"}</b></span><span><small>Runner-up</small><b>02 · {runner?.name ?? "—"}</b></span></div><div className="battle-links">{event.battles.length ? event.battles.map((battle) => <a key={battle.id} href={`https://splinterlands.com/?p=battle&id=${battle.id}`} target="_blank" rel="noreferrer"><span>▶</span>{battle.label}<small>{battle.players} ↗</small></a>) : <p className="no-battles">Replay links are not yet available from the API for this event.</p>}</div></div>}</article>; })}{!loading && completedEvents.length === 0 && <div className="empty-state results-empty"><span>API</span><h3>No completed events yet</h3><p>Results and direct battle replays will be added here automatically after the first tournament created by <b>@phoenixevents</b>.</p></div>}</div></section>
+    <section className="format-section" id="format"><div><p className="eyebrow">How it works</p><h2>One season.<br/>Two ways to rise.</h2></div><div className="format-grid"><article><span>01</span><h3>Create under phoenixevents</h3><p>The tracker discovers new tournaments from the organiser IGN automatically.</p></article><article><span>02</span><h3>Results become points</h3><p>Official placements drive Monday points; official tournament points drive the Championship table.</p></article><article><span>03</span><h3>Replays stay attached</h3><p>Final and semi-final battle IDs are linked directly from each event’s API record.</p></article></div></section>
+    <footer><div className="brand"><img src="/phoenix-reborn-logo.png" alt="" /><span><b>Phoenix Reborn</b><small>Rise again. Queue again.</small></span></div><p>Community-run Splinterlands competition.<br/>Official organiser: @phoenixevents</p><div><a href="#standings">Standings</a><a href="#results">Results</a><a href="https://splinterlands.com/?p=tournaments">Enter tournaments ↗</a></div></footer>
+  </main>;
 }
