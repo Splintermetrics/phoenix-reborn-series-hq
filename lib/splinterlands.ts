@@ -24,7 +24,11 @@ async function hydrate(tournament: ApiTournament): Promise<Tournament> {
 }
 
 export async function fetchPhoenixFeed(): Promise<TournamentFeed> {
-  const [inProgress, completed] = await Promise.all([getJson<ApiTournament[]>("/tournaments/in_progress"), getJson<ApiTournament[]>("/tournaments/completed")]);
-  const matching = [...inProgress, ...completed].filter((tournament, index, all) => tournament.created_by?.toLowerCase() === ORGANISER && all.findIndex((candidate) => candidate.id === tournament.id) === index).sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+  const [upcoming, inProgress, completed] = await Promise.all([
+    getJson<ApiTournament[]>("/tournaments/upcoming"),
+    getJson<ApiTournament[]>("/tournaments/in_progress"),
+    getJson<ApiTournament[]>("/tournaments/completed"),
+  ]);
+  const matching = [...upcoming, ...inProgress, ...completed].filter((tournament, index, all) => tournament.created_by?.toLowerCase() === ORGANISER && all.findIndex((candidate) => candidate.id === tournament.id) === index).sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
   return { organiser: ORGANISER, tournaments: await Promise.all(matching.map(hydrate)), syncedAt: new Date().toISOString() };
 }
