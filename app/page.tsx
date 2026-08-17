@@ -12,7 +12,8 @@ function buildStandings(tournaments: Tournament[]): Standing[] {
   const playerMap = new Map<string, Standing>();
   for (const tournament of tournaments.filter((item) => item.status === 2)) for (const result of tournament.players) {
     const current = playerMap.get(result.name) ?? { name: result.name, points: 0, played: 0, wins: 0, podiums: 0, form: [] };
-    current.points += mondayPoints(result.finish); current.played += 1; current.wins += result.finish === 1 ? 1 : 0; current.podiums += result.finish > 0 && result.finish <= 4 ? 1 : 0; current.form.push(result.finish > 0 ? String(result.finish) : "—"); playerMap.set(result.name, current);
+    const submitted = result.submittedMatches !== 0;
+    current.points += submitted ? mondayPoints(result.finish) : 0; current.played += 1; current.wins += submitted && result.finish === 1 ? 1 : 0; current.podiums += submitted && result.finish > 0 && result.finish <= 4 ? 1 : 0; current.form.push(submitted ? (result.finish > 0 ? String(result.finish) : "—") : "NS"); playerMap.set(result.name, current);
   }
   return [...playerMap.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || b.podiums - a.podiums || a.name.localeCompare(b.name));
 }
