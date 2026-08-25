@@ -26,7 +26,7 @@ async function hydrate(tournament: ApiTournament): Promise<Tournament> {
   const detail = await getJson<ApiTournament>(`/tournaments/find?id=${encodeURIComponent(tournament.id)}`);
   const roundCount = Number(detail.total_rounds ?? detail.current_round ?? 0);
   const roundDetails = detail.rounds?.length ? detail.rounds : Array.from({ length: roundCount }, (_, index) => ({ round: index + 1 }));
-  const matchPaths = detail.status === 2 ? roundDetails.flatMap(({ round, num_swiss_groups: groupCount }) => {
+  const matchPaths = (detail.status === 1 || detail.status === 2) ? roundDetails.flatMap(({ round, num_swiss_groups: groupCount }) => {
     const base = `/tournaments/battles?id=${encodeURIComponent(tournament.id)}&round=${round}&player_limit=1000`;
     if (detail.format !== "swiss") return [base];
     return groupCount ? Array.from({ length: groupCount }, (_, index) => `${base}&swiss_group=${index + 1}`) : [];
