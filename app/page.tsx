@@ -27,7 +27,7 @@ export default function Home() {
   useEffect(() => { loadFeed(); const timer = window.setInterval(() => loadFeed(), 300_000); return () => window.clearInterval(timer); }, [loadFeed]);
   const copy = seriesCopy; const seriesEvents = feed.tournaments; const completedEvents = seriesEvents.filter((event) => event.status === 2);
   const currentWeek = Math.min(completedEvents.length, copy.totalWeeks);
-  const nextEvent = [...seriesEvents].filter((event) => event.status !== 2).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())[0]; const standings = useMemo(() => buildStandings(feed.tournaments), [feed.tournaments]); const rows = standings.filter((row) => row.name.toLowerCase().includes(query.toLowerCase()));
+  const nextEvent = [...seriesEvents].filter((event) => event.status !== 2).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())[0]; const standings = useMemo(() => buildStandings(feed.tournaments).filter((row) => row.points > 0), [feed.tournaments]); const rows = standings.filter((row) => row.name.toLowerCase().includes(query.toLowerCase()));
 
   return <main>
     <header className="site-header"><a className="brand" href="#top" aria-label="Phoenix Reborn standings home"><img src="./phoenix-reborn-logo.png" alt="" /><span><b>Phoenix Reborn</b><small>Series HQ</small></span></a><nav aria-label="Primary navigation"><a href="#standings">Standings</a><a href="#results">Results</a><a href="#format">Format</a></nav><a className="watch" href="https://www.twitch.tv/phoenixreborntv" target="_blank" rel="noreferrer">Watch live <span>↗</span></a></header>
